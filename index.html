@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Aimlabs 2 - Pre-early alpha beta release test ($59.99)</title>
+    </head>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100vw;
+            min-height: 100vh;
+            height: 100%;
+            background-color: gray;
+        }
+
+        #area {
+            position: relative;
+            width: 700px;
+            height: 700px;
+            background-color: black;
+        }
+
+        .circle {
+            position: absolute;
+            left: 0%;
+            top: 0%;
+            width: 10%;
+            height: 10%;
+            border-radius: 50%;
+            background-color: red;
+        }
+        .circle:hover {
+            background-color: green;
+        }
+
+        #menu {
+            margin-left: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            gap: 3rem;
+        }
+
+        #menu > div:has(p, input) {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        p {
+            font-family: sans-serif;
+            color: hsl(20, 70%, 25%);
+            font-weight: bold;
+            font-size: 1.2em;
+            text-shadow: 1px 1px 0 hsl(250, 70%, 20%);
+        }
+
+        button {
+            padding: 6px 8px;
+        }
+
+        #popup {
+            position: fixed;
+            left: 0;
+            top: 0;
+            display: none;
+            padding: 2.5px 6px;
+            user-select: none;
+            text-align: center;
+            font-family: cursive;
+            color: white;
+            background: linear-gradient(
+                90deg,
+                hsla(150, 90%, 40%, 0.5) 20%,
+                hsla(60, 90%, 50%, 0.6) 50%,
+                hsla(15, 85%, 50%, 0.5) 80%
+            );
+            border: 2px solid hsla(0,0%,0%,0.4);
+            border-radius: 18.5px 25px 0 22px;
+            filter: blur(0.4px);
+        }
+    </style>
+
+    <body>
+        <div id="area">
+            <div class="circle"></div>
+        </div>
+        
+        <div id="menu">
+            <div>
+                <p>Direction change interval</p>
+                <input type="range" value="1500" min="100" max="2500" step="100">
+            </div>
+            <button>Start</button>
+        </div>
+
+        <p id="popup"></p>
+
+        <script defer>
+            // Measure refresh rate
+            const refreshRate = [];
+            async function measureRefreshRate() {
+                const timestamps = [];
+                const gatherData = () => {
+                    return new Promise(resolve => {
+                        requestAnimationFrame(test);
+                        function test(timestamp) {
+                            timestamps.push(timestamp);
+                            if (timestamps.length < 100) {
+                                requestAnimationFrame(test);
+                            } else {
+                                resolve();
+                            }
+                        }
+                    });
+                }
+                await gatherData();
+                const totalTime = timestamps[timestamps.length - 1] - timestamps[0];
+                const averageFrameDuration = totalTime / (timestamps.length - 1);
+                const rate = parseInt(1000 / averageFrameDuration);
+                const refreshRates = [
+                    60,
+                    75,
+                    90,
+                    120,
+                    144,
+                    160,
+                    165,
+                    170,
+                    175,
+                    180,
+                    240,
+                    300,
+                    360
+                ];
+                refreshRate.push(refreshRates.reduce((prev, current) => 
+                    Math.abs(current - rate) < Math.abs(prev - current) ? current : prev
+                ));
+                Object.freeze(refreshRate);
+            }
+            measureRefreshRate();
+
+            const circle = document.querySelector(".circle");
+            circle.style.left = circle.style.top = "45%";
+
+            const button = document.querySelector("button");
+            const rate = document.querySelector("input[type='range']");
+            let updateRate = rate.value;
+            let incomingEvents = 0;
+
+            const popup = document.querySelector("#popup");
+            let dragging = false;
+            rate.onmousedown = e => {
+                dragging = true;
+                Object.assign(popup.style, {
+                    display: "block",
+                    left: e.clientX-32+"px",
+                    top: e.clientY-40+"px"
+                });
+                popup.textContent = rate.value;
+            }
+            rate.onmousemove = e => {
+                popup.style.left = e.clientX-32+"px";
+                popup.style.top = e.clientY-40+"px";
+                popup.textContent = rate.value
+            }
+            document.onmouseup = () => {
+                if (!dragging) return;
+                popup.style.display = "none";
+            }
+
+            button.onclick = () => {
+                updateRate = rate.value;
+                rate.disabled = true;
+                button.disabled = true;
+
+                setTimeout(() => {
+                    setInterval(() => {
+                        if (refreshRate[0] === undefined) return;
+                        incomingEvents++;
+                        const targetX = randomNum(0, 90);
+                        const targetY = randomNum(0, 90);
+                        let currentX = parseFloat(circle.style.left);
+                        let currentY = parseFloat(circle.style.top);
+
+                        const updateSpeedX = (targetX - currentX) / refreshRate[0] / (updateRate/1000);
+                        const updateSpeedY = (targetY - currentY) / refreshRate[0] / (updateRate/1000);
+
+                        let id = requestAnimationFrame(smoothOut);
+                        function smoothOut(timestamp) {
+                            currentX = parseFloat(circle.style.left);
+                            currentY = parseFloat(circle.style.top);
+                            circle.style.left = (currentX+updateSpeedX)+"%";
+                            circle.style.top = (currentY+updateSpeedY)+"%";
+                            
+                            if (incomingEvents < 2) {
+                                id = requestAnimationFrame(smoothOut);
+                            } else {
+                                incomingEvents--;
+                                cancelAnimationFrame(id);
+                            }
+                        }
+                    }, updateRate);
+                }, 500);
+            }
+
+            function randomNum(max, min) {
+                return Math.floor(Math.random() * (max - min + 1) + min);
+            }
+        </script>
+    </body>
+</html>
